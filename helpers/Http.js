@@ -10,11 +10,7 @@ async function Http(url, method, data, responseType = false) {
 
     axiosOptions['method'] = method.toUpperCase();
 
-    if (method.toLowerCase() === 'get') {
-        axiosOptions['params'] = data;
-    } else {
-        axiosOptions['data'] = data;
-    }
+    axiosOptions['data'] = data;
 
     if (typeof(responseType) !== 'undefined' && responseType) {
         axiosOptions['responseType'] = responseType;

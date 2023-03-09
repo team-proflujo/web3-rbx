@@ -2,131 +2,125 @@ const { Http, formatURL } = require('./helpers/Http');
 const solcHelper = require('./helpers/solcHelper');
 const abiHelper = require('./helpers/ABIHelper');
 
-const rubixAPIBaseURL = 'http://localhost:8545';
+const defaultRubixAPIBaseURL = 'http://localhost:20000';
 
-async function requestRPC(url, method, data) {
-    data['id'] = 1;
-    data['jsonrpc'] = '2.0';
-    console.log('req data:', data);
+const RbxContract = function(rpcEndpoint, account, contractFileContent, contractAddress = false) {
+    this.rpcEndpoint = rpcEndpoint || defaultRubixAPIBaseURL;
+    this.account = account;
+    this.contractFileContent = contractFileContent;
 
-    return processRPCResponse(await Http(formatURL(rubixAPIBaseURL, url), method, data));
-}
+    // TODO: Multiple contract class in single sol file
 
-function processRPCResponse(res) {
-    let { success, response, error } = res;
+    if (contractAddress) {
+        this.contractAddress = contractAddress;
+    }
+};
+
+RbxContract.prototype.deploy = async function(constructorArgs) {
+    const {contractAbi, contractByteCode} = await solcHelper.compileContract(this.contractFileContent);
+
+    let { success, message, response, error } = await requestRPC(this.rpcEndpoint, '/api/contract/deploy', 'post', {
+        account: this.account,
+        // TODO: Pass constructor params when Deploying
+        // byteCode: (contractByteCode.startsWith('0x') ? contractByteCode : ('0x' + contractByteCode)) + (abiHelper.prepareMethodSignature(contractAbi, 'constructor', constructorArgs) || ''),
+        byteCode: (contractByteCode.startsWith('0x') ? contractByteCode : ('0x' + contractByteCode)),
+    });
 
     if (success) {
-        if (response.data.error) {
-            success = false;
-            error = response.data.error;
+        if (!message) {
+            message = 'Contract deployed successfully.';
         }
+
+        console.log(message);
+
+        this.contractAddress = response.data.contractAddress;
+
+        return this.contractAddress;
     } else {
-        //
-    }
+        if (!message) {
+            message = 'Failed to deploy the Contract.';
+        }
 
-    return {success, response, error};
-}
-
-// only for ethereum
-async function unlockAccount(account, password) {
-    let { success, response, error } = await requestRPC('', 'post', {
-        method: 'personal_unlockAccount',
-        params: [
-            account, password, 3600,
-        ],
-    });
-
-    if (success) {
-        console.log('Account unlocked.');
-    } else {
-        console.log('Error when unlocking Account:', error);
-    }
-
-    return success;
-}
-
-// @param password is only for Ethereum
-async function deploy(account, password, contractFilePath, contractClassName, constructorArgs) {
-    if (!await unlockAccount(account, password)) {
-        return;
-    }
-
-    const {contractAbi, contractByteCode} = await solcHelper.getCompiledContractData(contractFilePath, contractClassName);
-
-    let { success, response, error } = await requestRPC('', 'post', {
-        method: 'eth_sendTransaction',
-        params: [
-            {
-                from: (account.startsWith('0x') ? account : ('0x' + account)),
-                data: (contractByteCode.startsWith('0x') ? contractByteCode : ('0x' + contractByteCode)) + (abiHelper.prepareMethodSignature(contractAbi, 'constructor', constructorArgs) || ''),
-            }
-        ],
-    });
-
-    if (success) {
-        // Txn receipt for Ethereum
-        const txnReceipt = response.data.result;
-
-        console.log('Contract Deployment initiated! Transaction receipt:', txnReceipt);
-
-        // TODO: return contract address when implementing Rubix RPC
-        return txnReceipt;
-    } else {
-        console.log('Error when Deploying Contract:', error);
+        console.error(message, '\n\nError:', error);
     }
 
     return false;
 }
 
-async function call(account, password, contractFilePath, contractClassName, contractAddress, methodToCall, methodArgs) {
-    // unlock account when call incase store method is called
-    if (!await unlockAccount(account, password)) {
-        return;
-    }
-
-    const {contractAbi, contractByteCode} = await solcHelper.getCompiledContractData(contractFilePath, contractClassName);
+RbxContract.prototype.call = async function(methodToCall, methodArgs = []) {
+    const {contractAbi, contractByteCode} = await solcHelper.compileContract(this.contractFileContent);
     const reqData =  abiHelper.prepareMethodSignature(contractAbi, methodToCall, methodArgs);
 
     if (!reqData) {
         return;
     }
 
-    let { success, response, error } = await requestRPC('', 'post', {
-        method: 'eth_call',
-        params: [
-            {
-                from: (account.startsWith('0x') ? account : ('0x' + account)),
-                to: (contractAddress.startsWith('0x') ? contractAddress : ('0x' + contractAddress)),
-                data: reqData,
-            },
-            'latest',
-        ],
+    let { success, message, response, error } = await requestRPC(this.rpcEndpoint, '/api/contract/call', 'post', {
+        account: this.account,
+        contractAddress: (this.contractAddress.startsWith('0x') ? this.contractAddress : ('0x' + this.contractAddress)),
+        data: reqData,
     });
 
     if (success) {
-        console.log('Contract method executed successfully.');
+        if (!message) {
+            message = 'Contract method executed successfully.';
+        }
+
+        console.log(message);
 
         return abiHelper.parseMethodResult(contractAbi, methodToCall, methodArgs, response.data.result);
     } else {
-        console.log('Error when calling Contract method:', error);
+        if (!message) {
+            message = 'Failed to execute the Contract method.';
+        }
+
+        console.error(message, '\n\nError:', error);
     }
 
     return false;
 }
 
-const RbxContract = function(account, password, contractFilePath, contractClassName) {
-    this.account = account;
-    this.password = password;
-    this.contractFilePath = contractFilePath;
-    this.contractClassName = contractClassName;
-};
+RbxContract.prototype.getCode = async function() {
+    let { success, message, response, error } = await requestRPC(this.rpcEndpoint, '/api/contract/code', 'get', {
+        account: this.account,
+        contractAddress: (this.contractAddress.startsWith('0x') ? this.contractAddress : ('0x' + this.contractAddress)),
+    });
 
-RbxContract.prototype.deploy = async function(constructorArgs) {
-    return await deploy(this.account, this.password, this.contractFilePath, this.contractClassName, constructorArgs);
+    if (success) {
+        return response.data.byteCode;
+    } else {
+        if (!message) {
+            message = 'Failed to get the Contract code.';
+        }
+
+        console.error(message, '\n\nError:', error);
+    }
+
+    return false;
 }
 
-RbxContract.prototype.call = async function(contractAddress, methodToCall, methodArgs = []) {
-    return await call(this.account, this.password, this.contractFilePath, this.contractClassName, contractAddress, methodToCall, methodArgs);
+async function requestRPC(rpcEndpoint, url, method, data) {
+    // console.log('req data:', data);
+
+    return processRPCResponse(await Http(formatURL(rpcEndpoint, url), method, data));
+}
+
+function processRPCResponse(res) {
+    let { success, response, error } = res, message = '';
+
+    if (response && response.data) {
+        message = response.data.message;
+    }
+
+    if (success) {
+        if (response && response.data.success) {
+            //
+        } else {
+            success = false;
+        }
+    }
+
+    return {success, message, response, error};
 }
 
 module.exports = RbxContract;
