@@ -1,4 +1,4 @@
-# WebRbx
+# Web3Rbx
 
 Client side wrapper for Rubix RPC.
 

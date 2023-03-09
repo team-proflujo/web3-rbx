@@ -1,5 +1,5 @@
 {
-  "name": "web3-rbx",
+  "name": "@proflujo/web3-rbx",
   "version": "1.0.0",
   "description": "Client side wrapper for Rubix RPC",
   "main": "index.js",
@@ -8,6 +8,10 @@
   },
   "author": "Proflujo",
   "license": "ISC",
+  "keywords": [
+    "web3", "rubix"
+  ],
+  "homepage": "https://github.com/team-proflujo/web3-rbx",
   "dependencies": {
     "@ethersproject/abi": "^5.7.0",
     "axios": "^1.3.4",
