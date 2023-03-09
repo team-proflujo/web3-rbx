@@ -1,19 +1,19 @@
 # WebRbx
 
-Web3 like script module, used to Deploy & Execute Smart Contracts in Rubix blockchain.
+Client side wrapper for Rubix RPC.
 
 ## How to Use
 
-1. Install package: `npm install web-rbx`.
+1. Install package: `npm install web3-rbx`.
 
 2. Import in your code:
 
     ```js
     // Import module
-    const RbxContract = require('web-rbx');
+    const RbxContract = require('web3-rbx');
 
     // Initialize Contract class
-    const contract = RbxContract('ACCOUNT_ADDRESS', 'ACCOUNT_PASSWORD', 'PATH_TO_SOLC_FILE', 'CONTRACT_CLASS_NAME');
+    const contract = RbxContract('RPC_ENDPOINT', 'ACCOUNT_ADDRESS', 'SOLIDITY_CONTRACT_CODE');
     ```
 
 3. To Deploy:

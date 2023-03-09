@@ -1,12 +1,12 @@
 {
-  "name": "web-rbx",
+  "name": "web3-rbx",
   "version": "1.0.0",
-  "description": "",
+  "description": "Client side wrapper for Rubix RPC",
   "main": "index.js",
   "scripts": {
     "test": "echo \"No Test scripts!\" && exit 0"
   },
-  "author": "",
+  "author": "Proflujo",
   "license": "ISC",
   "dependencies": {
     "@ethersproject/abi": "^5.7.0",
