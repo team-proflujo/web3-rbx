@@ -1,7 +1,11 @@
 const solc = require('solc');
 
-async function compileContract(contractFileContent) {
-    console.log(`Compiling the contract...`);
+const SolcHelper = function(logger) {
+    this.logger = logger;
+}
+
+SolcHelper.prototype.CompileContract = function(contractFileContent) {
+    this.logger.Info(`Compiling the contract...`);
 
     let contractFileName = `contract.sol`;
 
@@ -29,13 +33,11 @@ async function compileContract(contractFileContent) {
     }
 
     if (!(contractAbi && contractByteCode)) {
-        console.error('Contract compile failed!');
+        this.logger.Error('Contract compile failed!');
         return false;
     }
 
     return {contractAbi, contractByteCode};
 }
 
-module.exports = {
-    compileContract,
-};
+module.exports = SolcHelper;

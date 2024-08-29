@@ -1,31 +1,35 @@
 const ethereumJsUtil = require('ethereumjs-util');
 const ethersAbiCoder = new (require('@ethersproject/abi').AbiCoder)();
 
-function getMethodEntryFromABI(contractAbi, method) {
+const ABIHelper = function(logger) {
+    this.logger = logger;
+}
+
+ABIHelper.prototype.__getMethodEntryFromABI = function(contractAbi, method) {
     let methodEntry = contractAbi.filter(obj => (method === 'constructor' && obj.type === 'constructor') || (obj.name === method && obj.type === 'function'));
 
     if (methodEntry.length === 0) {
-        console.error(`Error: Method "${method}" not found in the Contract!`);
+        this.logger.Error(`Error: Method "${method}" not found in the Contract!`);
         return false;
     } else {
         methodEntry = methodEntry[0];
     }
 
     if (['view', 'pure', 'nonpayable'].indexOf(methodEntry.stateMutability) === -1) {
-        console.error('Error: Calling "payable method" is not implemented yet!');
+        this.logger.Error('Error: Calling "payable method" is not implemented yet!');
         return false;
     }
 
     return methodEntry;
 }
 
-function prepareMethodSignature(contractAbi, methodToCall, methodArgs) {
-    let methodEntry = getMethodEntryFromABI(contractAbi, methodToCall);
+ABIHelper.prototype.PrepareMethodSignature = function(contractAbi, methodToCall, methodArgs) {
+    let methodEntry = this.__getMethodEntryFromABI(contractAbi, methodToCall);
 
     if (!methodEntry) {
         return false;
     } else if (methodEntry.inputs.length !== methodArgs.length) {
-        console.error('Error: Invalid number of arguments! You need to pass ' + methodEntry.inputs.length + ' arguments.');
+        this.logger.Error('Error: Invalid number of arguments! You need to pass ' + methodEntry.inputs.length + ' arguments.');
         return false;
     }
 
@@ -51,15 +55,15 @@ function prepareMethodSignature(contractAbi, methodToCall, methodArgs) {
     return methodSignature;
 }
 
-function parseMethodResult(contractAbi, methodToCall, methodArgs, methodResult) {
-    let methodEntry = getMethodEntryFromABI(contractAbi, methodToCall);
+ABIHelper.prototype.ParseMethodResult = function(methodToCall, methodArgs, methodResult) {
+    let methodEntry = this.__getMethodEntryFromABI(methodToCall);
 
     if (!methodEntry) {
         return;
     }
 
     if (methodEntry.outputs.length === 0) {
-        console.error('Method does not return any value!');
+        this.logger.Error('Method does not return any value!');
         return;
     }
 
@@ -80,21 +84,17 @@ function parseMethodResult(contractAbi, methodToCall, methodArgs, methodResult) 
         }
 
         if (processedOutput) {
-            console.log('Contract method Result:', processedOutput);
+            this.logger.Info('Contract method Result:', processedOutput);
 
             return processedOutput;
         } else {
-            console.error('Error: Unable to parse Method output!');
+            this.logger.Error('Error: Unable to parse Method output!');
         }
     } else {
-        console.error('Error: Empty value returned by method');
+        this.logger.Error('Error: Empty value returned by method');
     }
 
     return false;
 }
 
-module.exports = {
-    getMethodEntryFromABI,
-    prepareMethodSignature,
-    parseMethodResult,
-};
+module.exports = ABIHelper;

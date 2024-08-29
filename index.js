@@ -1,10 +1,20 @@
-const { Http, formatURL } = require('./helpers/Http');
-const solcHelper = require('./helpers/solcHelper');
-const abiHelper = require('./helpers/ABIHelper');
+const Http = require('./helpers/Http');
+const SolcHelper = require('./helpers/solcHelper');
+const ABIHelper = require('./helpers/ABIHelper');
+const { Logger, LoggerType } = require('./helpers/logger');
 
 const defaultRubixAPIBaseURL = 'http://localhost:20000';
 
 const RbxContract = function(rpcEndpoint, account, contractFileContent, contractAddress = false) {
+    // Initialize Logger
+    this.Logger = new Logger(LoggerType.ALL);
+    // Do not show logs by default
+    this.Logger.Pause();
+
+    this.__http = new Http(this.Logger);
+    this.__solc = new SolcHelper(this.Logger);
+    this.__abi = new ABIHelper(this.Logger);
+
     this.rpcEndpoint = rpcEndpoint || defaultRubixAPIBaseURL;
     this.account = account;
     this.contractFileContent = contractFileContent;
@@ -17,13 +27,14 @@ const RbxContract = function(rpcEndpoint, account, contractFileContent, contract
 };
 
 RbxContract.prototype.deploy = async function(constructorArgs) {
-    const {contractAbi, contractByteCode} = await solcHelper.compileContract(this.contractFileContent);
+    const {contractAbi, contractByteCode} = this.__solc.CompileContract(this.contractFileContent);
 
-    let { success, message, response, error } = await requestRPC(this.rpcEndpoint, '/api/contract/deploy', 'post', {
+    let constructorParams = this.__abi.PrepareMethodSignature(contractAbi, 'constructor', constructorArgs);
+
+    let { success, message, response, error } = await this.__requestRPC(this.rpcEndpoint, '/api/contract/deploy', 'post', {
         account: this.account,
-        // TODO: Pass constructor params when Deploying
-        // byteCode: (contractByteCode.startsWith('0x') ? contractByteCode : ('0x' + contractByteCode)) + (abiHelper.prepareMethodSignature(contractAbi, 'constructor', constructorArgs) || ''),
         byteCode: (contractByteCode.startsWith('0x') ? contractByteCode : ('0x' + contractByteCode)),
+        params: (constructorParams ? `0x${constructorParams}` : '' ),
     });
 
     if (success) {
@@ -31,7 +42,7 @@ RbxContract.prototype.deploy = async function(constructorArgs) {
             message = 'Contract deployed successfully.';
         }
 
-        console.log(message);
+        this.Logger.Info(message);
 
         this.contractAddress = response.data.contractAddress;
 
@@ -41,24 +52,24 @@ RbxContract.prototype.deploy = async function(constructorArgs) {
             message = 'Failed to deploy the Contract.';
         }
 
-        console.error(message, '\n\nError:', error);
+        this.Logger.Error(message, '\n\nError:', error);
     }
 
     return false;
 }
 
 RbxContract.prototype.call = async function(methodToCall, methodArgs = []) {
-    const {contractAbi, contractByteCode} = await solcHelper.compileContract(this.contractFileContent);
-    const reqData =  abiHelper.prepareMethodSignature(contractAbi, methodToCall, methodArgs);
+    const {contractAbi, contractByteCode} = this.__solc.CompileContract(this.contractFileContent);
+    const reqData =  this.__abi.PrepareMethodSignature(contractAbi, methodToCall, methodArgs);
 
     if (!reqData) {
         return;
     }
 
-    let { success, message, response, error } = await requestRPC(this.rpcEndpoint, '/api/contract/call', 'post', {
+    let { success, message, response, error } = await this.__requestRPC(this.rpcEndpoint, '/api/contract/call', 'post', {
         account: this.account,
         contractAddress: (this.contractAddress.startsWith('0x') ? this.contractAddress : ('0x' + this.contractAddress)),
-        data: reqData,
+        params: reqData,
     });
 
     if (success) {
@@ -66,22 +77,22 @@ RbxContract.prototype.call = async function(methodToCall, methodArgs = []) {
             message = 'Contract method executed successfully.';
         }
 
-        console.log(message);
+        this.Logger.Info(message);
 
-        return abiHelper.parseMethodResult(contractAbi, methodToCall, methodArgs, response.data.result);
+        return this.__abi.ParseMethodResult(contractAbi, methodToCall, methodArgs, response.data.result);
     } else {
         if (!message) {
             message = 'Failed to execute the Contract method.';
         }
 
-        console.error(message, '\n\nError:', error);
+        this.Logger.Error(message, '\n\nError:', error);
     }
 
     return false;
 }
 
 RbxContract.prototype.getCode = async function() {
-    let { success, message, response, error } = await requestRPC(this.rpcEndpoint, '/api/contract/code', 'get', {
+    let { success, message, response, error } = await this.__requestRPC(this.rpcEndpoint, '/api/contract/code', 'get', {
         account: this.account,
         contractAddress: (this.contractAddress.startsWith('0x') ? this.contractAddress : ('0x' + this.contractAddress)),
     });
@@ -93,19 +104,19 @@ RbxContract.prototype.getCode = async function() {
             message = 'Failed to get the Contract code.';
         }
 
-        console.error(message, '\n\nError:', error);
+        this.Logger.Error(message, '\n\nError:', error);
     }
 
     return false;
 }
 
-async function requestRPC(rpcEndpoint, url, method, data) {
-    // console.log('req data:', data);
+RbxContract.prototype.__requestRPC = async function(url, method, data) {
+    // this.Logger.Info('req data:', data);
 
-    return processRPCResponse(await Http(formatURL(rpcEndpoint, url), method, data));
+    return this.__processRPCResponse(await this.__http.Send(this.__http.FormatURL(this.rpcEndpoint, url), method, data));
 }
 
-function processRPCResponse(res) {
+RbxContract.prototype.__processRPCResponse = function(res) {
     let { success, response, error } = res, message = '';
 
     if (response && response.data) {

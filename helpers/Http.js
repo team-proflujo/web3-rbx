@@ -1,6 +1,10 @@
 const axios = require('axios');
 
-async function Http(url, method, data, responseType = false) {
+const Http = function(logger) {
+    this.logger = logger;
+}
+
+Http.prototype.Send = async function(url, method, data, responseType = false) {
     let axiosOptions = {
         url: url,
         headers: {},
@@ -34,7 +38,7 @@ async function Http(url, method, data, responseType = false) {
     return { success, response, error };
 }
 
-function formatURL(...args) {
+Http.prototype.FormatURL = function(...args) {
     let formattedURL;
 
     if (args.length > 0) {
@@ -60,7 +64,4 @@ function formatURL(...args) {
     return formattedURL;
 }
 
-module.exports = {
-    Http,
-    formatURL,
-};
+module.exports = Http;
